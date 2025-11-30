@@ -5,6 +5,7 @@ import { checkToken } from '../../middleware/checkToken.js';
 const router = express.Router();
 
 const FREE_SKETCH_LIMIT = parseInt(process.env.FREE_SKETCH_LIMIT);
+const PREMIUM_SKETCH_LIMIT = parseInt(process.env.PREMIUM_SKETCH_LIMIT);
 const MAX_SKETCH_LIMIT = parseInt(process.env.MAX_SKETCH_LIMIT);
 
 router.post('/', checkToken, async (req, res) => {
@@ -39,13 +40,25 @@ router.post('/', checkToken, async (req, res) => {
 
     if (usageError) throw usageError;
 
-    const limit = data.plan === 'pro' ? MAX_SKETCH_LIMIT : FREE_SKETCH_LIMIT;
+    //const limit = (data.plan === 'pro' || data.plan === 'premium') ? MAX_SKETCH_LIMIT : FREE_SKETCH_LIMIT;
+
+    const limit = (plan) => {
+      switch (plan) {
+        case 'premium':
+          return PREMIUM_SKETCH_LIMIT;
+        case 'pro':
+          return MAX_SKETCH_LIMIT;
+        default:
+          return FREE_SKETCH_LIMIT;
+      }
+  }
+    const limitValue = limit(data.plan);
 
     return res.json({
       ok: true,
       usage: {
         used: data.sketch_count,
-        limit,
+        limitValue,
         remaining: Math.max(0, limit - data.sketch_count)
       }
     });
