@@ -59,7 +59,7 @@ router.post('/', checkToken, async (req, res) => {
       usage: {
         used: data.sketch_count,
         limitValue,
-        remaining: Math.max(0, limit - data.sketch_count)
+        remaining: Math.max(0, limitValue - data.sketch_count)
       }
     });
 
