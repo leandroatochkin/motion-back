@@ -60,7 +60,8 @@ router.post('/', checkToken, async (req, res) => {
         used: data.sketch_count,
         limitValue,
         remaining: Math.max(0, limitValue - data.sketch_count)
-      }
+      },
+      plan: data.plan
     });
 
   } catch (err) {
