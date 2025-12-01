@@ -9,9 +9,9 @@ const router = express.Router();
 router.post('/', async (req, res) => {
   console.log('Body recibido:', req.body);
 
-  const { email, amount, planName, captchaToken } = req.body;
+  const { email, amount, plan, captchaToken } = req.body;
 
-  if (!email || !amount || !planName || !captchaToken) {
+  if (!email || !amount || !plan || !captchaToken) {
     return res.status(400).json({ 
       error: 'Faltan campos requeridos' 
     });
