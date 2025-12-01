@@ -1,10 +1,11 @@
 import express from 'express';
 import { createSubscriptionCharge, handleWebhook } from './mercadopago.js';
+import { checkToken } from '../../middleware/checkToken.js';
 
 const router = express.Router();
 
 // POST /payment
-router.post('/', async (req, res) => {
+router.post('/', checkToken, async (req, res) => {
   console.log('Body recibido:', req.body);
 
   const { email, amount, planName } = req.body;

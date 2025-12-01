@@ -6,6 +6,7 @@ import checkLoginRoute from './api/routes/auth/checkLogin.js';
 import createSketchRoute from './api/routes/sketches/createSketch.js';
 import paymentRoute from './api/routes/payment/payment.js';
 import cors from 'cors';
+import validateCaptchaRoute from './api/routes/auth/validateCaptcha.js';
 
 const app = express();
 const host = process.env.PORT
@@ -36,6 +37,7 @@ app.use(bodyParser.json());
 app.use('/auth/check-login', checkLoginRoute);
 app.use('/sketches/create-sketch', createSketchRoute);
 app.use('/payment', paymentRoute)
+app.use('/validate-captcha', validateCaptchaRoute);
 
 
 app.listen(3000, ()=>console.log(`listening on port ${host}`))
