@@ -1,5 +1,6 @@
 import express from 'express';
 import { createSubscriptionCharge, handleWebhook } from './mercadopago.js';
+import { verifyCaptcha } from '../auth/validateCaptcha.js';
 import { checkToken } from '../../middleware/checkToken.js';
 
 const router = express.Router();
@@ -8,13 +9,19 @@ const router = express.Router();
 router.post('/', checkToken, async (req, res) => {
   console.log('Body recibido:', req.body);
 
-  const { email, amount, planName } = req.body;
+  const { email, amount, planName, captchaToken } = req.body;
 
-  if (!email || !amount || !planName) {
+  if (!email || !amount || !planName || !captchaToken) {
     return res.status(400).json({ 
-      error: 'Faltan campos: email, amount, planName' 
+      error: 'Faltan campos requeridos' 
     });
   }
+  
+  const captchaValid = await verifyCaptcha(captchaToken);
+  if (!captchaValid) {
+    return res.status(400).json({ error: 'Captcha inválido' });
+  }
+
 
   const result = await createSubscriptionCharge({
     email,
