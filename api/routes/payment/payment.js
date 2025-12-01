@@ -9,18 +9,18 @@ const router = express.Router();
 router.post('/', async (req, res) => {
   console.log('Body recibido:', req.body);
 
-  const { email, amount, plan, captchaToken } = req.body;
+  const { email, amount, plan } = req.body;
 
-  if (!email || !amount || !plan || !captchaToken) {
+  if (!email || !amount || !plan) {
     return res.status(400).json({ 
       error: 'Faltan campos requeridos' 
     });
   }
   
-  const captchaValid = await verifyCaptcha(captchaToken);
-  if (!captchaValid) {
-    return res.status(400).json({ error: 'Captcha inválido' });
-  }
+  // const captchaValid = await verifyCaptcha(captchaToken);
+  // if (!captchaValid) {
+  //   return res.status(400).json({ error: 'Captcha inválido' });
+  // }
 
 
   const result = await createSubscriptionCharge({
