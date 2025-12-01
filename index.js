@@ -12,9 +12,11 @@ const app = express();
 const host = process.env.PORT
 const environment = process.env.ENVIRONMENT
 
-const frontendURL = process.env.FRONTEND_URL_A;
+const frontendURLA = process.env.FRONTEND_URL_A;
+const frontendURLB = process.env.FRONTEND_URL_B;
 const allowedOrigins = [
-    frontendURL,
+    frontendURLA,
+    frontendURLB
 ];
 app.use(cors({
     origin: (origin, callback) => {
