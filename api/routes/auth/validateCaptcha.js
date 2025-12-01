@@ -3,7 +3,7 @@ import axios from "axios";
 
 const router = express.Router();
 
-async function verifyCaptcha(token) {
+export async function verifyCaptcha(token) {
   const secret = process.env.CAPTCHA_SECRET_KEY;
 
   const verifyURL = "https://hcaptcha.com/siteverify";
