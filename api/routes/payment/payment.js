@@ -6,7 +6,7 @@ import { checkToken } from '../../middleware/checkToken.js';
 const router = express.Router();
 
 // POST /payment
-router.post('/', checkToken, async (req, res) => {
+router.post('/', async (req, res) => {
   console.log('Body recibido:', req.body);
 
   const { email, amount, planName, captchaToken } = req.body;
