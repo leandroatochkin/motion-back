@@ -1,5 +1,5 @@
 import express from 'express';
-import { createSubscriptionCharge, handleWebhook } from './mercadopago.js';
+import { createDirectSubscription, handleWebhook } from './mercadopago.js';
 import { PLAN_IDS } from './mercadopago.js';
 import { verifyCaptcha } from '../auth/validateCaptcha.js';
 import { checkToken } from '../../middleware/checkToken.js';
@@ -8,41 +8,40 @@ const router = express.Router();
 
 // POST /payment
 router.post('/', async (req, res) => {
-  console.log('Body recibido:', req.body);
+  console.log('📥 Body recibido:', req.body);
 
   const { email, plan } = req.body;
 
-  if (!email || !plan) {
+  const planName = plan; // 'premium' o 'pro'
+
+  if (!email || !planName) {
     return res.status(400).json({ 
-      error: 'Faltan campos requeridos' 
+      error: 'Faltan campos requeridos: email, planName, captchaToken' 
     });
   }
 
-  const planName = plan
+  // Define los precios
+  const prices = {
+    premium: 5999,
+    pro: 9999
+  };
 
-  const planId = PLAN_IDS[planName];
-  
-  // const captchaValid = await verifyCaptcha(captchaToken);
-  // if (!captchaValid) {
-  //   return res.status(400).json({ error: 'Captcha inválido' });
-  // }
- 
-
-   if (!planId) {
+  if (!prices[planName]) {
     return res.status(400).json({ 
-      error: '❌ Los planes no han sido creados todavía',
-      hint: 'Ejecuta primero: POST /payment/create-plans',
-      currentPlans: PLAN_IDS
+      error: 'Plan inválido. Use "premium" o "pro"' 
     });
   }
 
-  const result = await createSubscriptionCharge({
+  console.log(`🔄 Creating subscription for ${email}...`);
+
+  const result = await createDirectSubscription({
     email,
-    //amount: parseFloat(amount),
-    planId
+    amount: prices[planName],
+    planName: `Plan ${planName.charAt(0).toUpperCase() + planName.slice(1)} - Motion Crush`,
+    frequency: 1
   });
 
-   if (result.success) {
+  if (result.success) {
     console.log('✅ Subscription created:', result.subscriptionId);
     res.json({
       success: true,

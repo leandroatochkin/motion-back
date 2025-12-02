@@ -141,6 +141,49 @@ export async function createSubscriptionPlan(planData) {
   }
 }
 
+export async function createDirectSubscription(subscriptionData) {
+  try {
+    const {
+      email,
+      amount,
+      planName,
+      frequency = 1,
+      backUrl = `${process.env.FRONTEND_URL_A}/payment-success`
+    } = subscriptionData;
+
+    const preapproval = await preApprovalClient.create({
+      body: {
+        reason: planName,
+        payer_email: email,
+        back_url: backUrl,
+        auto_recurring: {
+          frequency: frequency,
+          frequency_type: 'months',
+          transaction_amount: amount,
+          currency_id: 'ARS'
+        },
+        status: 'pending'
+      }
+    });
+
+    return {
+      success: true,
+      subscriptionId: preapproval.id,
+      initPoint: preapproval.init_point,
+      status: preapproval.status
+    };
+
+  } catch (error) {
+    console.error('MercadoPago Direct Subscription Error:', error);
+    return {
+      success: false,
+      error: error.message,
+      details: error.cause || error
+    };
+  }
+}
+
+
 /**
  * Subscribe a user to an existing plan
  * @param {Object} subscriptionData - Subscription details
