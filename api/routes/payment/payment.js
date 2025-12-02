@@ -9,13 +9,15 @@ const router = express.Router();
 router.post('/', async (req, res) => {
   console.log('Body recibido:', req.body);
 
-  const { email, amount, plan } = req.body;
+  const { email, plan } = req.body;
 
-  if (!email || !amount || !plan) {
+  if (!email || !plan) {
     return res.status(400).json({ 
       error: 'Faltan campos requeridos' 
     });
   }
+
+  const planName = plan
   
   // const captchaValid = await verifyCaptcha(captchaToken);
   // if (!captchaValid) {
@@ -26,7 +28,7 @@ router.post('/', async (req, res) => {
   const result = await createSubscriptionCharge({
     email,
     amount: parseFloat(amount),
-    plan,
+    planName,
     frequency: 1
   });
 
