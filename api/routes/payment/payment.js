@@ -27,7 +27,7 @@ router.post('/', async (req, res) => {
 
   const result = await createSubscriptionCharge({
     email,
-    amount: parseFloat(amount),
+    //amount: parseFloat(amount),
     planName,
     frequency: 1
   });
