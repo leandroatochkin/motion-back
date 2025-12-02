@@ -34,7 +34,7 @@ router.post('/', checkToken, async (req, res) => {
     // Step 2: Get usage
     const { data, error: usageError } = await supabase
       .from('users')
-      .select('sketch_count, plan')
+      .select('sketch_count, plan, subscription_id')
       .eq('id', userId)
       .maybeSingle();
 
@@ -61,7 +61,8 @@ router.post('/', checkToken, async (req, res) => {
         limitValue,
         remaining: Math.max(0, limitValue - data.sketch_count)
       },
-      plan: data.plan
+      plan: data.plan,
+      subsriptionId: data.subscription_id
     });
 
   } catch (err) {

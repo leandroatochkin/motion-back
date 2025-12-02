@@ -1,8 +1,6 @@
 import express from 'express';
 import { createDirectSubscription, handleWebhook } from './mercadopago.js';
-import { PLAN_IDS } from './mercadopago.js';
-import { verifyCaptcha } from '../auth/validateCaptcha.js';
-import { checkToken } from '../../middleware/checkToken.js';
+
 
 const router = express.Router();
 
@@ -60,14 +58,6 @@ router.post('/', async (req, res) => {
   }
 });
 
-// POST /payment/webhook/mercadopago
-router.post('/webhook/mercadopago', async (req, res) => {
-  console.log('Webhook recibido:', req.body);
-  
-  const result = await handleWebhook(req.body);
-  console.log('Webhook procesado:', result);
-  
-  res.sendStatus(200);
-});
+
 
 export default router;

@@ -5,7 +5,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 import express from 'express';
 const router = express.Router();
-
+import { supabase } from '../../storage/supabase.js';
 import { MercadoPagoConfig, PreApproval, Payment, PreApprovalPlan } from 'mercadopago';
 
 // Initialize MercadoPago client
@@ -18,13 +18,13 @@ const client = new MercadoPagoConfig({
 
 const preApprovalClient = new PreApproval(client);
 const preApprovalPlanClient = new PreApprovalPlan(client);
-const paymentClient = new Payment(client);
+export const paymentClient = new Payment(client);
 
 // Store plan IDs (IMPORTANTE: En producción usa una base de datos)
-export const PLAN_IDS = {
-  premium: null,
-  pro: null
-};
+// export const PLAN_IDS = {
+//   premium: null,
+//   pro: null
+// };
 
 // PASO 1: Ejecuta esta ruta UNA SOLA VEZ para crear los planes
 router.post('/', async (req, res) => {
@@ -64,8 +64,25 @@ router.post('/', async (req, res) => {
     }
 
     // Guardar los IDs (en memoria, pero deberías usar DB)
-    PLAN_IDS.premium = premiumPlan.planId;
-    PLAN_IDS.pro = proPlan.planId;
+    // PLAN_IDS.premium = premiumPlan.planId;
+    // PLAN_IDS.pro = proPlan.planId;
+
+    const { error: insertError } = await supabase
+      .from('plans')
+      .insert([
+        { 
+          id: premiumPlan.planId,
+          name: 'premium',
+          amount: 5999
+        },
+        { 
+          id: proPlan.planId,
+          name: 'pro',
+          amount: 9999
+        }
+      ]);
+
+    if (insertError) throw insertError;
 
     console.log('✅ Plans created successfully:', PLAN_IDS);
 
@@ -144,6 +161,7 @@ export async function createSubscriptionPlan(planData) {
 export async function createDirectSubscription(subscriptionData) {
   try {
     const {
+      userId,
       email,
       amount,
       planName,
@@ -162,6 +180,7 @@ export async function createDirectSubscription(subscriptionData) {
           transaction_amount: amount,
           currency_id: 'ARS'
         },
+        external_reference: `${userId}_${planName}`,
         status: 'pending'
       }
     });
@@ -334,25 +353,34 @@ export async function getPlanDetails(planId) {
  * @param {string} subscriptionId - The subscription ID to cancel
  * @returns {Promise<Object>} Cancellation response
  */
-export async function cancelSubscription(subscriptionId) {
+export async function cancelSubscription(subscriptionId, userId) {
   try {
+    // Cancel in MercadoPago
     const response = await preApprovalClient.update({
       id: subscriptionId,
-      body: {
-        status: 'cancelled'
-      }
+      body: { status: 'cancelled' }
     });
+
+    // Update user plan in Supabase
+    const { error: updateError } = await supabase
+      .from('users')
+      .update({ plan: 'free' })
+      .eq('id', userId);
+
+    if (updateError) {
+      console.error('❌ Supabase update error:', updateError);
+      return { success: false, error: updateError.message };
+    }
 
     return {
       success: true,
-      status: response.status
+      status: response.status,
+      planUpdated: true
     };
+
   } catch (error) {
     console.error('Cancel Subscription Error:', error);
-    return {
-      success: false,
-      error: error.message
-    };
+    return { success: false, error: error.message };
   }
 }
 
