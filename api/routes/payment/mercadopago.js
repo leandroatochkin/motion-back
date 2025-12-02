@@ -146,25 +146,29 @@ export async function createSubscriptionPlan(planData) {
  * @param {Object} subscriptionData - Subscription details
  * @returns {Promise<Object>} Subscription response
  */
+// Actualiza createSubscriptionCharge en mercadopago.js
 export async function createSubscriptionCharge(subscriptionData) {
   try {
     const {
       email,
       planId,
       backUrl = `${process.env.FRONTEND_URL_A}/payment-success`,
-      cardTokenId = null
+      autoRecurring = true // Esto es clave
     } = subscriptionData;
 
     const subscriptionBody = {
       preapproval_plan_id: planId,
       payer_email: email,
       back_url: backUrl,
+      auto_recurring: {
+        frequency: 1,
+        frequency_type: "months",
+        transaction_amount: 0, // Se toma del plan
+        currency_id: "ARS",
+        start_date: new Date().toISOString()
+      },
       status: 'pending'
     };
-
-    if (cardTokenId) {
-      subscriptionBody.card_token_id = cardTokenId;
-    }
 
     const preapproval = await preApprovalClient.create({
       body: subscriptionBody
@@ -173,7 +177,7 @@ export async function createSubscriptionCharge(subscriptionData) {
     return {
       success: true,
       subscriptionId: preapproval.id,
-      initPoint: preapproval.init_point,
+      initPoint: preapproval.init_point, // URL para redirigir al usuario
       status: preapproval.status
     };
 
