@@ -3,6 +3,8 @@
 // npm install mercadopago
 import dotenv from 'dotenv';
 dotenv.config();
+import express from 'express';
+const router = express.Router();
 
 import { MercadoPagoConfig, PreApproval, Payment, PreApprovalPlan } from 'mercadopago';
 
@@ -18,6 +20,78 @@ const preApprovalClient = new PreApproval(client);
 const preApprovalPlanClient = new PreApprovalPlan(client);
 const paymentClient = new Payment(client);
 
+// Store plan IDs (IMPORTANTE: En producción usa una base de datos)
+const PLAN_IDS = {
+  premium: null,
+  pro: null
+};
+
+// PASO 1: Ejecuta esta ruta UNA SOLA VEZ para crear los planes
+router.post('/create-plans', async (req, res) => {
+  try {
+    console.log('Creating Premium plan...');
+    const premiumPlan = await createSubscriptionPlan({
+      planName: 'Plan Premium - Motion Crush',
+      amount: 5999,
+      frequency: 1,
+      billingDay: 1,
+      repetitions: 12
+    });
+
+    if (!premiumPlan.success) {
+      console.error('Premium plan error:', premiumPlan);
+      return res.status(500).json({ 
+        error: 'Error creating premium plan', 
+        details: premiumPlan.error 
+      });
+    }
+
+    console.log('Creating Pro plan...');
+    const proPlan = await createSubscriptionPlan({
+      planName: 'Plan Pro - Motion Crush',
+      amount: 9999,
+      frequency: 1,
+      billingDay: 1,
+      repetitions: 12
+    });
+
+    if (!proPlan.success) {
+      console.error('Pro plan error:', proPlan);
+      return res.status(500).json({ 
+        error: 'Error creating pro plan', 
+        details: proPlan.error 
+      });
+    }
+
+    // Guardar los IDs (en memoria, pero deberías usar DB)
+    PLAN_IDS.premium = premiumPlan.planId;
+    PLAN_IDS.pro = proPlan.planId;
+
+    console.log('✅ Plans created successfully:', PLAN_IDS);
+
+    res.json({
+      success: true,
+      message: '¡Planes creados! Guarda estos IDs en tu base de datos',
+      plans: {
+        premium: {
+          id: premiumPlan.planId,
+          amount: 5999
+        },
+        pro: {
+          id: proPlan.planId,
+          amount: 9999
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Error in create-plans:', error);
+    res.status(500).json({ 
+      error: error.message,
+      details: error 
+    });
+  }
+});
 /**
  * Create a subscription plan in MercadoPago (execute once per plan)
  * @param {Object} planData - Plan details
