@@ -1,175 +1,285 @@
-// api/routes/payment/payment.js
-import express from 'express';
-import { 
-  createSubscriptionPlan, 
-  createSubscriptionCharge,
-  getPlanDetails,
-  cancelSubscription,
-  handleWebhook 
-} from './mercadopago.js';
+// mercadopago-subscription.js
+// ES6 Module for MercadoPago Subscriptions v2.x
+// npm install mercadopago
+import dotenv from 'dotenv';
+dotenv.config();
 
-const router = express.Router();
+import { MercadoPagoConfig, PreApproval, Payment, PreApprovalPlan } from 'mercadopago';
 
-// Store plan IDs (in production, use a database)
-const PLAN_IDS = {
-  premium: null,
-  pro: null
-};
+// Initialize MercadoPago client
+const client = new MercadoPagoConfig({ 
+  accessToken: process.env.MERCADO_PAGO_ACCESS_TOKEN,
+  options: { 
+    timeout: 5000
+  }
+});
 
-// POST /payment/create-plans - Execute once to create plans
-router.post('/create-plans', async (req, res) => {
+const preApprovalClient = new PreApproval(client);
+const preApprovalPlanClient = new PreApprovalPlan(client);
+const paymentClient = new Payment(client);
+
+/**
+ * Create a subscription plan in MercadoPago (execute once per plan)
+ * @param {Object} planData - Plan details
+ * @returns {Promise<Object>} Plan response
+ */
+export async function createSubscriptionPlan(planData) {
   try {
-    // Create Premium plan
-    const premiumPlan = await createSubscriptionPlan({
-      planName: 'Plan Premium - Motion Crush',
-      amount: 5999,
-      frequency: 1,
-      billingDay: 1,
-      repetitions: 12
-    });
+    const {
+      planName,
+      amount,
+      frequency = 1,
+      repetitions = 12,
+      billingDay = 1,
+      billingDayProportional = true,
+      backUrl = `${process.env.FRONTEND_URL_A}/payment-success`
+    } = planData;
 
-    if (!premiumPlan.success) {
-      return res.status(500).json({ 
-        error: 'Error creating premium plan', 
-        details: premiumPlan.error 
-      });
-    }
-
-    // Create Pro plan
-    const proPlan = await createSubscriptionPlan({
-      planName: 'Plan Pro - Motion Crush',
-      amount: 9999,
-      frequency: 1,
-      billingDay: 1,
-      repetitions: 12
-    });
-
-    if (!proPlan.success) {
-      return res.status(500).json({ 
-        error: 'Error creating pro plan', 
-        details: proPlan.error 
-      });
-    }
-
-    PLAN_IDS.premium = premiumPlan.planId;
-    PLAN_IDS.pro = proPlan.planId;
-
-    console.log('Plans created successfully:', PLAN_IDS);
-
-    res.json({
-      success: true,
-      plans: {
-        premium: {
-          id: premiumPlan.planId,
-          amount: 5999
+    const plan = await preApprovalPlanClient.create({
+      body: {
+        reason: planName,
+        auto_recurring: {
+          frequency: frequency,
+          frequency_type: 'months',
+          repetitions: repetitions,
+          billing_day: billingDay,
+          billing_day_proportional: billingDayProportional,
+          transaction_amount: amount,
+          currency_id: 'ARS'
         },
-        pro: {
-          id: proPlan.planId,
-          amount: 9999
-        }
-      },
-      message: 'Save these IDs in your database!'
+        back_url: backUrl
+      }
     });
+
+    return {
+      success: true,
+      planId: plan.id,
+      data: plan
+    };
 
   } catch (error) {
-    res.status(500).json({ 
+    console.error('MercadoPago Plan Error:', error);
+    return {
+      success: false,
       error: error.message,
-      details: error 
-    });
+      details: error.cause || error
+    };
   }
-});
+}
 
-// POST /payment - Subscribe user to a plan
-router.post('/', async (req, res) => {
-  console.log('Body recibido:', req.body);
+/**
+ * Subscribe a user to an existing plan
+ * @param {Object} subscriptionData - Subscription details
+ * @returns {Promise<Object>} Subscription response
+ */
+export async function createSubscriptionCharge(subscriptionData) {
+  try {
+    const {
+      email,
+      planId,
+      backUrl = `${process.env.FRONTEND_URL_A}/payment-success`,
+      cardTokenId = null
+    } = subscriptionData;
 
-  const { email, planName } = req.body;
+    const subscriptionBody = {
+      preapproval_plan_id: planId,
+      payer_email: email,
+      back_url: backUrl,
+      status: 'pending'
+    };
 
-  if (!email || !planName) {
-    return res.status(400).json({ 
-      error: 'Faltan campos requeridos: email, planName, captchaToken' 
+    if (cardTokenId) {
+      subscriptionBody.card_token_id = cardTokenId;
+    }
+
+    const preapproval = await preApprovalClient.create({
+      body: subscriptionBody
     });
-  }
 
-  // Validate plan exists
-  if (!['premium', 'pro'].includes(planName)) {
-    return res.status(400).json({ 
-      error: 'Plan inválido. Use "premium" o "pro"' 
-    });
-  }
-
-  // Get plan ID (in production, get from database)
-  const planId = PLAN_IDS[planName];
-  
-  if (!planId) {
-    return res.status(400).json({ 
-      error: 'Plan no encontrado. Ejecuta POST /payment/create-plans primero',
-      hint: 'Debes crear los planes antes de suscribir usuarios'
-    });
-  }
-
-  // TODO: Validate captcha here
-  // const captchaValid = await validateCaptcha(captchaToken);
-  // if (!captchaValid) return res.status(400).json({ error: 'Captcha inválido' });
-
-  const result = await createSubscriptionCharge({
-    email,
-    planId
-  });
-
-  if (result.success) {
-    res.json({
+    return {
       success: true,
-      subscriptionId: result.subscriptionId,
-      checkoutUrl: result.initPoint,
-      status: result.status
-    });
-  } else {
-    res.status(400).json({ 
+      subscriptionId: preapproval.id,
+      initPoint: preapproval.init_point,
+      status: preapproval.status
+    };
+
+  } catch (error) {
+    console.error('MercadoPago Subscription Error:', error);
+    return {
       success: false,
-      error: result.error, 
-      details: result.details 
-    });
+      error: error.message,
+      details: error.cause || error
+    };
   }
-});
+}
 
-// POST /payment/cancel/:subscriptionId - Cancel subscription
-router.post('/cancel/:subscriptionId', async (req, res) => {
-  const { subscriptionId } = req.params;
+/**
+ * Alternative: Create a one-time payment (for manual recurring)
+ * @param {Object} paymentData - Payment details
+ * @returns {Promise<Object>} Payment response
+ */
+export async function createOneTimeCharge(paymentData) {
+  try {
+    const {
+      email,
+      amount,
+      description,
+      paymentMethodId,
+      token,
+      notificationUrl = `${process.env.FRONTEND_URL_A}/webhook/mercadopago`
+    } = paymentData;
 
-  const result = await cancelSubscription(subscriptionId);
-  
-  if (result.success) {
-    res.json({ 
+    const payment = await paymentClient.create({
+      body: {
+        transaction_amount: amount,
+        description: description,
+        payment_method_id: paymentMethodId,
+        token: token,
+        installments: 1,
+        payer: {
+          email: email
+        },
+        notification_url: notificationUrl,
+        metadata: {
+          subscription_payment: true
+        }
+      }
+    });
+
+    return {
       success: true,
-      message: 'Subscription cancelled',
-      status: result.status 
-    });
-  } else {
-    res.status(400).json({ 
-      success: false,
-      error: result.error 
-    });
-  }
-});
+      paymentId: payment.id,
+      status: payment.status,
+      statusDetail: payment.status_detail
+    };
 
-// POST /payment/webhook/mercadopago - Handle MercadoPago notifications
-router.post('/webhook/mercadopago', async (req, res) => {
-  console.log('Webhook recibido:', req.body);
-  
-  const result = await handleWebhook(req.body);
-  
-  if (result.success) {
-    // Update your database here based on result.type and result.status
-    console.log('Webhook procesado:', result);
+  } catch (error) {
+    console.error('Payment Error:', error);
+    return {
+      success: false,
+      error: error.message,
+      details: error.cause || error
+    };
+  }
+}
+
+/**
+ * Get subscription status
+ * @param {string} subscriptionId - The subscription ID
+ * @returns {Promise<Object>} Subscription details
+ */
+export async function getSubscriptionStatus(subscriptionId) {
+  try {
+    const response = await preApprovalClient.get({ id: subscriptionId });
     
-    // Example: Update user subscription status in database
-    // if (result.type === 'subscription' && result.status === 'authorized') {
-    //   await updateUserSubscription(result.subscriptionId, 'active');
-    // }
+    return {
+      success: true,
+      status: response.status,
+      data: response
+    };
+  } catch (error) {
+    console.error('Get Subscription Error:', error);
+    return {
+      success: false,
+      error: error.message
+    };
   }
-  
-  res.sendStatus(200); // Always return 200 to MercadoPago
-});
+}
 
-export default router;
+/**
+ * Get plan details
+ * @param {string} planId - The plan ID
+ * @returns {Promise<Object>} Plan details
+ */
+export async function getPlanDetails(planId) {
+  try {
+    const response = await preApprovalPlanClient.get({ id: planId });
+    
+    return {
+      success: true,
+      data: response
+    };
+  } catch (error) {
+    console.error('Get Plan Error:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
+
+/**
+ * Cancel a subscription
+ * @param {string} subscriptionId - The subscription ID to cancel
+ * @returns {Promise<Object>} Cancellation response
+ */
+export async function cancelSubscription(subscriptionId) {
+  try {
+    const response = await preApprovalClient.update({
+      id: subscriptionId,
+      body: {
+        status: 'cancelled'
+      }
+    });
+
+    return {
+      success: true,
+      status: response.status
+    };
+  } catch (error) {
+    console.error('Cancel Subscription Error:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
+
+/**
+ * Handle webhook notifications
+ * @param {Object} webhookData - Data from MercadoPago webhook
+ * @returns {Promise<Object>} Processed webhook data
+ */
+export async function handleWebhook(webhookData) {
+  const { type, data } = webhookData;
+
+  try {
+    if (type === 'preapproval') {
+      const subscriptionId = data.id;
+      const subscriptionData = await getSubscriptionStatus(subscriptionId);
+      
+      return {
+        success: true,
+        type: 'subscription',
+        subscriptionId,
+        status: subscriptionData.status,
+        data: subscriptionData.data
+      };
+    }
+
+    if (type === 'payment') {
+      const paymentId = data.id;
+      const payment = await paymentClient.get({ id: paymentId });
+      
+      return {
+        success: true,
+        type: 'payment',
+        paymentId,
+        status: payment.status,
+        data: payment
+      };
+    }
+
+    return {
+      success: false,
+      error: 'Unknown webhook type'
+    };
+
+  } catch (error) {
+    console.error('Webhook Handler Error:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
