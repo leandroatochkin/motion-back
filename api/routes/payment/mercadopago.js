@@ -27,7 +27,7 @@ const PLAN_IDS = {
 };
 
 // PASO 1: Ejecuta esta ruta UNA SOLA VEZ para crear los planes
-router.post('/create-plans', async (req, res) => {
+router.post('/', async (req, res) => {
   try {
     console.log('Creating Premium plan...');
     const premiumPlan = await createSubscriptionPlan({
@@ -357,3 +357,5 @@ export async function handleWebhook(webhookData) {
     };
   }
 }
+
+export default router;
