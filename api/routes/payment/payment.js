@@ -1,5 +1,6 @@
 import express from 'express';
 import { createSubscriptionCharge, handleWebhook } from './mercadopago.js';
+import { PLAN_IDS } from './mercadopago.js';
 import { verifyCaptcha } from '../auth/validateCaptcha.js';
 import { checkToken } from '../../middleware/checkToken.js';
 
@@ -18,28 +19,43 @@ router.post('/', async (req, res) => {
   }
 
   const planName = plan
+
+  const planId = PLAN_IDS[planName];
   
   // const captchaValid = await verifyCaptcha(captchaToken);
   // if (!captchaValid) {
   //   return res.status(400).json({ error: 'Captcha inválido' });
   // }
+ 
 
+   if (!planId) {
+    return res.status(400).json({ 
+      error: '❌ Los planes no han sido creados todavía',
+      hint: 'Ejecuta primero: POST /payment/create-plans',
+      currentPlans: PLAN_IDS
+    });
+  }
 
   const result = await createSubscriptionCharge({
     email,
     //amount: parseFloat(amount),
-    planName,
-    frequency: 1
+    planId
   });
 
-  if (result.success) {
+   if (result.success) {
+    console.log('✅ Subscription created:', result.subscriptionId);
     res.json({
+      success: true,
       subscriptionId: result.subscriptionId,
-      checkoutUrl: result.initPoint
+      checkoutUrl: result.initPoint,
+      status: result.status,
+      message: 'Redirige al usuario a checkoutUrl para completar el pago'
     });
   } else {
+    console.error('❌ Subscription error:', result);
     res.status(400).json({ 
-      error: result.error,
+      success: false,
+      error: result.error, 
       details: result.details 
     });
   }

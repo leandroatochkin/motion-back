@@ -21,7 +21,7 @@ const preApprovalPlanClient = new PreApprovalPlan(client);
 const paymentClient = new Payment(client);
 
 // Store plan IDs (IMPORTANTE: En producción usa una base de datos)
-const PLAN_IDS = {
+export const PLAN_IDS = {
   premium: null,
   pro: null
 };
