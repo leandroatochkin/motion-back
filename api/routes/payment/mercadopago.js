@@ -84,7 +84,7 @@ router.post('/', async (req, res) => {
 
     if (insertError) throw insertError;
 
-    console.log('✅ Plans created successfully:', PLAN_IDS);
+    console.log('✅ Plans created successfully:');
 
     res.json({
       success: true,
