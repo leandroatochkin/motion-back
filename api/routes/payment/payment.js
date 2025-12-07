@@ -20,8 +20,8 @@ router.post('/', async (req, res) => {
 
   // Define los precios
   const prices = {
-    premium: 5999,
-    pro: 9999
+    premium: 16,
+    pro: 16
   };
 
   if (!prices[planName]) {
