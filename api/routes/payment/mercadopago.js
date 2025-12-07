@@ -32,7 +32,7 @@ router.post('/', async (req, res) => {
     console.log('Creating Premium plan...');
     const premiumPlan = await createSubscriptionPlan({
       planName: 'Plan Premium - Motion Crush',
-      amount: 1,
+      amount: 16,
       frequency: 1,
       billingDay: 1,
       repetitions: 12
