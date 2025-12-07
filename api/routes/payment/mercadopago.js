@@ -49,7 +49,7 @@ router.post('/', async (req, res) => {
     console.log('Creating Pro plan...');
     const proPlan = await createSubscriptionPlan({
       planName: 'Plan Pro - Motion Crush',
-      amount: 15,
+      amount: 16,
       frequency: 1,
       billingDay: 1,
       repetitions: 12
