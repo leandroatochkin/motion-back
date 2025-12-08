@@ -1,10 +1,11 @@
 import express from 'express';
 import { cancelSubscription } from './mercadopago.js';
+import { checkToken } from '../../middleware/checkToken.js';
 
 const router = express.Router();
 
 // POST /payment  → Cancel subscription
-router.post('/', async (req, res) => {
+router.post('/', checkToken, async (req, res) => {
   const { subscriptionId, userId } = req.body;
 
   // Validate required fields

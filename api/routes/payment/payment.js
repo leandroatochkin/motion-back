@@ -1,11 +1,14 @@
+import dotenv, { parse } from 'dotenv';
+dotenv.config();
 import express from 'express';
 import { createDirectSubscription, handleWebhook } from './mercadopago.js';
+import { checkToken } from '../../middleware/checkToken.js';
 
 
 const router = express.Router();
 
 // POST /payment
-router.post('/', async (req, res) => {
+router.post('/', checkToken, async (req, res) => {
   console.log('📥 Body recibido:', req.body);
 
   const { email, plan } = req.body;
@@ -20,8 +23,8 @@ router.post('/', async (req, res) => {
 
   // Define los precios
   const prices = {
-    premium: 16,
-    pro: 16
+    premium: parseInt(process.env.MP_PREMIUM_PRICE),
+    pro: parseInt(process.env.MP_PRO_PRICE)
   };
 
   if (!prices[planName]) {

@@ -1,16 +1,21 @@
 // payment.js
 import express from 'express';
 import { supabase } from '../../storage/supabase.js';
+import { checkToken } from '../../middleware/checkToken.js';
 
 const router = express.Router();
 
 
-router.post('/', async (req, res) => {
-const { userId, subscriptionId } = req.body;
+router.post('/', checkToken, async (req, res) => {
+const { userId, subscriptionId, collectionStatus } = req.body;
 
-if(!userId || !subscriptionId) {
-    return res.status(400).json({ error: 'userId and subscriptionId are required' });
+if(!userId || !subscriptionId || !collectionStatus) {
+    return res.status(400).json({ error: 'userId, subscriptionId and collectionStatus are required' });
 }
+
+  if (collectionStatus !== 'approved' || collectionStatus !== 'authorized') {
+    return res.status(400).json({ error: 'Payment not approved or authorized' });
+    }
 
   const { data: user, error } = await supabase
     .from('users')
