@@ -12,26 +12,22 @@ router.post('/', async (req, res) => {
 
   try {
     /* -------------------------------------------------------------------------- */
-    /*                     🔹 EVENTS: subscription_preapproval                     */
+    /*                 🔹 1. SUBSCRIPTION_PREAPPROVAL EVENTS                      */
     /* -------------------------------------------------------------------------- */
-
     if (type === 'subscription_preapproval') {
       const subscriptionId = data.id;
 
-      // Fetch MercadoPago subscription details
       const subscription = await getSubscriptionStatus(subscriptionId);
-
-      if (!subscription.success) {
-        console.log('❌ Error fetching subscription status');
-        return res.sendStatus(200);
-      }
+      if (!subscription.success) return res.sendStatus(200);
 
       const {
-        status,                  // authorized, pending, paused, cancelled
+        status,                  // pending, authorized, paused, cancelled
         payer_email,
         auto_recurring,
         external_reference
       } = subscription.data;
+
+      const nextBilling = auto_recurring?.next_payment_date || null;
 
       const [userId, planName] = external_reference?.split('_') || [];
 
@@ -41,75 +37,62 @@ router.post('/', async (req, res) => {
         action,
         userId,
         planName,
+        nextBilling
       });
 
-      /* -------------------------------------------------------------------------- */
-      /*                            🔹 1. SUB CREATED                               */
-      /* -------------------------------------------------------------------------- */
+      /* ---------------------- CREATED (no payment yet) ----------------------- */
       if (action === 'created') {
-        console.log('🟦 Subscription created but not authorized yet.');
-      }
+        console.log("🟦 Subscription created — user has NOT paid yet.");
 
-      /* -------------------------------------------------------------------------- */
-      /*                     🔹 2. SUB AUTHORIZED (first payment OK)                */
-      /* -------------------------------------------------------------------------- */
-      if (status === 'authorized') {
-        console.log('🟩 Subscription authorized — updating user plan');
-
-        const { error } = await supabase
-          .from('users')
+        await supabase.from('users')
           .update({
-            plan: planName,
-            sketch_count: 0,
-            subscription_id: subscriptionId
+            subscription_id: subscriptionId,
+            status: 'pending',
+            next_billing: nextBilling,
+            valid_until: nextBilling
           })
           .eq('id', userId);
 
-        if (error) console.error('❌ Error updating plan:', error);
-        else console.log(`✅ User ${userId} upgraded to plan ${planName}`);
+        return res.sendStatus(200);
       }
 
-      /* -------------------------------------------------------------------------- */
-      /*                     🔹 3. SUB PAUSED BY MP OR USER                        */
-      /* -------------------------------------------------------------------------- */
+      /* ------------------- PAUSED (payment failed or user) ------------------- */
       if (status === 'paused') {
-        console.log('🟧 Subscription paused — setting plan to free');
+        console.log('🟧 Subscription paused — switching user to free');
 
-        const { error } = await supabase
-          .from('users')
+        await supabase.from('users')
           .update({
+            status: 'paused',
             plan: 'free'
           })
           .eq('id', userId);
 
-        if (error) console.error('❌ Error pausing plan:', error);
-        else console.log(`⏸️ User ${userId} plan set to free (paused)`);
+        return res.sendStatus(200);
       }
 
-      /* -------------------------------------------------------------------------- */
-      /*                     🔹 4. SUB CANCELLED (user or MP)                       */
-      /* -------------------------------------------------------------------------- */
+      /* ------------------- CANCELLED (user or MP) ---------------------------- */
       if (status === 'cancelled') {
-        console.log('🟥 Subscription cancelled — downgrading user');
+        console.log('🟥 Subscription cancelled — switching user to free');
 
-        const { error } = await supabase
-          .from('users')
+        await supabase.from('users')
           .update({
+            status: 'cancelled',
             plan: 'free',
-            subscription_id: null
+            subscription_id: null,
+            next_billing: null,
+            valid_until: null
           })
           .eq('id', userId);
 
-        if (error) console.error('❌ Error cancelling plan:', error);
-        else console.log(`🧹 User ${userId} downgraded to free`);
+        return res.sendStatus(200);
       }
     }
 
     /* -------------------------------------------------------------------------- */
-    /*                              🔹 PAYMENT EVENTS                               */
+    /*                              🔹 2. PAYMENT EVENTS                           */
     /* -------------------------------------------------------------------------- */
-
     if (type === 'payment') {
+
       const paymentId = data.id;
       const payment = await paymentClient.get({ id: paymentId });
 
@@ -117,18 +100,36 @@ router.post('/', async (req, res) => {
         paymentId,
         status: payment.status,
         amount: payment.transaction_amount,
-        subscriptionId: payment?.preapproval_id,
+        subscriptionId: payment.preapproval_id
       });
 
-      // Renewals will hit here — optional handling
+      /* ------------------- FIRST PAYMENT CONFIRMED ---------------------------- */
       if (payment.status === 'approved' && payment.preapproval_id) {
-        console.log(`🔄 Renewal payment for subscription ${payment.preapproval_id}`);
+        const subscriptionId = payment.preapproval_id;
 
-        // No need to update Supabase plan — subscription keeps user on the same plan
+        const subscription = await getSubscriptionStatus(subscriptionId);
+        if (!subscription.success) return res.sendStatus(200);
+
+        const { external_reference, auto_recurring } = subscription.data;
+        const nextBilling = auto_recurring?.next_payment_date || null;
+
+        const [userId, planName] = external_reference.split('_');
+
+        console.log(`🟩 First payment successful → activate plan ${planName}`);
+
+        await supabase.from('users')
+          .update({
+            plan: planName,
+            status: 'active',
+            next_billing: nextBilling,
+            valid_until: nextBilling,
+            subscription_id: subscriptionId
+          })
+          .eq('id', userId);
+
+        console.log(`✅ User ${userId} plan activated`);
       }
     }
-
-    /* -------------------------------------------------------------------------- */
 
     return res.sendStatus(200);
 

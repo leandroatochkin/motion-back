@@ -176,12 +176,13 @@ export async function createDirectSubscription(subscriptionData) {
         back_url: backUrl,
         auto_recurring: {
           frequency: frequency,
-          frequency_type: 'months',
+          frequency_type: "months",
           transaction_amount: amount,
-          currency_id: 'ARS'
+          currency_id: "ARS"
         },
+        notification_url: `${process.env.BACKEND_URL}/webhook-mercadopago`,
         external_reference: `${userId}_${planName}`,
-        status: 'pending'
+        status: "pending"
       }
     });
 
@@ -193,7 +194,7 @@ export async function createDirectSubscription(subscriptionData) {
     };
 
   } catch (error) {
-    console.error('MercadoPago Direct Subscription Error:', error);
+    console.error("MercadoPago Direct Subscription Error:", error);
     return {
       success: false,
       error: error.message,
@@ -201,6 +202,7 @@ export async function createDirectSubscription(subscriptionData) {
     };
   }
 }
+
 
 
 /**
