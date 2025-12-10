@@ -1,4 +1,4 @@
-import dotenv, { parse } from 'dotenv';
+import dotenv from 'dotenv';
 dotenv.config();
 import express from 'express';
 import { createDirectSubscription } from './mercadopago.js';
@@ -13,24 +13,32 @@ router.post('/', checkToken, async (req, res) => {
 
   const { userId, email, plan } = req.body;
 
+  // Validate incoming data
   if (!userId || !email || !plan) {
     return res.status(400).json({
+      success: false,
       error: 'Faltan campos requeridos: userId, email, plan'
     });
   }
 
+  // Your plan prices
   const prices = {
     premium: parseInt(process.env.MP_PREMIUM_PRICE),
     pro: parseInt(process.env.MP_PRO_PRICE)
   };
 
   if (!prices[plan]) {
-    return res.status(400).json({ error: 'Plan inválido' });
+    return res.status(400).json({ 
+      success: false,
+      error: 'Plan inválido'
+    });
   }
 
-  console.log(`🔄 Creating subscription for ${email}...`);
+  console.log(`🔄 Creating subscription for user ${userId} (${email})`);
 
+  // Create subscription in MP
   const result = await createDirectSubscription({
+    userId,
     email,
     amount: prices[plan],
     planName: `Plan ${plan.charAt(0).toUpperCase() + plan.slice(1)} - Motion Crush`,
@@ -46,18 +54,19 @@ router.post('/', checkToken, async (req, res) => {
     });
   }
 
-  const { subscriptionId, nextBillingDate } = result;
+  const { subscriptionId, status } = result;
 
-  console.log('📌 Updating user subscription info on Supabase...');
+  console.log('📌 Saving new subscription in Supabase...');
 
+  // Store subscription info
   const { error: updateErr } = await supabase
     .from('users')
     .update({
       subscription_id: subscriptionId,
-      plan: plan,
-      status: result.status || 'pending',
-      next_billing: nextBillingDate,
-      valid_until: nextBillingDate // they keep access until that date
+      subscription_status: status || 'pending',
+      plan: 'pending',               // User gets full plan only after MP approves
+      next_billing_date: null,       // MP will send via webhook after 1st payment
+      cancel_at: null
     })
     .eq('id', userId);
 
@@ -69,14 +78,15 @@ router.post('/', checkToken, async (req, res) => {
     });
   }
 
+  // Return redirect URL
   return res.json({
     success: true,
     subscriptionId,
     checkoutUrl: result.initPoint,
-    nextBillingDate,
+    subscriptionStatus: status,
     message: 'Redirige al usuario a checkoutUrl para completar el pago'
   });
 });
 
-
 export default router;
+

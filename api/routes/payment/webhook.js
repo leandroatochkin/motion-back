@@ -1,141 +1,49 @@
-import express from 'express';
-import { getSubscriptionStatus } from './mercadopago.js';
-import { paymentClient } from './mercadopago.js';
-import { supabase } from '../../storage/supabase.js';
+import express from "express";
+import { supabase } from "../../storage/supabase.js";
+import { preApprovalClient } from "./mercadopago.js";
 
 const router = express.Router();
 
-router.post('/', async (req, res) => {
-  console.log('🔔 Webhook recibido:', req.body);
-
-  const { type, action, data } = req.body;
-
+router.post("/", async (req, res) => {
   try {
-    /* -------------------------------------------------------------------------- */
-    /*                 🔹 1. SUBSCRIPTION_PREAPPROVAL EVENTS                      */
-    /* -------------------------------------------------------------------------- */
-    if (type === 'subscription_preapproval') {
-      const subscriptionId = data.id;
+    const { type, data } = req.body;
 
-      const subscription = await getSubscriptionStatus(subscriptionId);
-      if (!subscription.success) return res.sendStatus(200);
+    if (type !== "preapproval") return res.sendStatus(200);
 
-      const {
-        status,                  // pending, authorized, paused, cancelled
-        payer_email,
-        auto_recurring,
-        external_reference
-      } = subscription.data;
+    const subscriptionId = data.id;
 
-      const nextBilling = auto_recurring?.next_payment_date || null;
+    // Get full subscription info from MP
+    const sub = await preApprovalClient.get({ id: subscriptionId });
 
-      const [userId, planName] = external_reference?.split('_') || [];
+    const {
+      status,
+      next_payment_date,
+      external_reference
+    } = sub;
 
-      console.log('📡 Subscription Event:', {
-        subscriptionId,
-        status,
-        action,
-        userId,
-        planName,
-        nextBilling
-      });
+    const [userId] = external_reference.split("_");
 
-      /* ---------------------- CREATED (no payment yet) ----------------------- */
-      if (action === 'created') {
-        console.log("🟦 Subscription created — user has NOT paid yet.");
+    // Map MP status → your internal status
+    let plan = "free";
 
-        await supabase.from('users')
-          .update({
-            subscription_id: subscriptionId,
-            status: 'pending',
-            next_billing: nextBilling,
-            valid_until: nextBilling
-          })
-          .eq('id', userId);
+    if (status === "authorized" || status === "active") plan = "premium";
+    if (status === "pending") plan = "pending";
+    if (status === "paused" || status === "cancelled") plan = "free";
 
-        return res.sendStatus(200);
-      }
-
-      /* ------------------- PAUSED (payment failed or user) ------------------- */
-      if (status === 'paused') {
-        console.log('🟧 Subscription paused — switching user to free');
-
-        await supabase.from('users')
-          .update({
-            status: 'paused',
-            plan: 'free'
-          })
-          .eq('id', userId);
-
-        return res.sendStatus(200);
-      }
-
-      /* ------------------- CANCELLED (user or MP) ---------------------------- */
-      if (status === 'cancelled') {
-        console.log('🟥 Subscription cancelled — switching user to free');
-
-        await supabase.from('users')
-          .update({
-            status: 'cancelled',
-            plan: 'free',
-            subscription_id: null,
-            next_billing: null,
-            valid_until: null
-          })
-          .eq('id', userId);
-
-        return res.sendStatus(200);
-      }
-    }
-
-    /* -------------------------------------------------------------------------- */
-    /*                              🔹 2. PAYMENT EVENTS                           */
-    /* -------------------------------------------------------------------------- */
-    if (type === 'payment') {
-
-      const paymentId = data.id;
-      const payment = await paymentClient.get({ id: paymentId });
-
-      console.log('💰 Payment Event:', {
-        paymentId,
-        status: payment.status,
-        amount: payment.transaction_amount,
-        subscriptionId: payment.preapproval_id
-      });
-
-      /* ------------------- FIRST PAYMENT CONFIRMED ---------------------------- */
-      if (payment.status === 'approved' && payment.preapproval_id) {
-        const subscriptionId = payment.preapproval_id;
-
-        const subscription = await getSubscriptionStatus(subscriptionId);
-        if (!subscription.success) return res.sendStatus(200);
-
-        const { external_reference, auto_recurring } = subscription.data;
-        const nextBilling = auto_recurring?.next_payment_date || null;
-
-        const [userId, planName] = external_reference.split('_');
-
-        console.log(`🟩 First payment successful → activate plan ${planName}`);
-
-        await supabase.from('users')
-          .update({
-            plan: planName,
-            status: 'active',
-            next_billing: nextBilling,
-            valid_until: nextBilling,
-            subscription_id: subscriptionId
-          })
-          .eq('id', userId);
-
-        console.log(`✅ User ${userId} plan activated`);
-      }
-    }
+    await supabase
+      .from("users")
+      .update({
+        subscription_status: status,
+        next_billing_date: next_payment_date ?? null,
+        plan,
+        updated_at: new Date().toISOString()
+      })
+      .eq("id", userId);
 
     return res.sendStatus(200);
-
   } catch (err) {
-    console.error('❌ Webhook Error:', err);
-    return res.sendStatus(200);
+    console.error("Webhook error:", err);
+    return res.sendStatus(500);
   }
 });
 

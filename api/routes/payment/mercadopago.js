@@ -175,16 +175,24 @@ export async function createDirectSubscription(subscriptionData) {
         payer_email: email,
         back_url: backUrl,
         auto_recurring: {
-          frequency: frequency,
+          frequency,
           frequency_type: "months",
           transaction_amount: amount,
           currency_id: "ARS"
         },
-        notification_url: `${process.env.BACKEND_URL}/webhook-mercadopago`,
         external_reference: `${userId}_${planName}`,
         status: "pending"
       }
     });
+
+    // Save subscription in DB as pending
+    await supabase.from("users")
+      .update({
+        subscription_id: preapproval.id,
+        status: "pending",
+        plan: "pending"
+      })
+      .eq("id", userId);
 
     return {
       success: true,
@@ -195,14 +203,9 @@ export async function createDirectSubscription(subscriptionData) {
 
   } catch (error) {
     console.error("MercadoPago Direct Subscription Error:", error);
-    return {
-      success: false,
-      error: error.message,
-      details: error.cause || error
-    };
+    return { success: false, error: error.message };
   }
 }
-
 
 
 /**
@@ -357,32 +360,33 @@ export async function getPlanDetails(planId) {
  */
 export async function cancelSubscription(subscriptionId, userId) {
   try {
-    // Cancel in MercadoPago
+    // Cancel the subscription in MP
     const response = await preApprovalClient.update({
       id: subscriptionId,
-      body: { status: 'cancelled' }
+      body: { status: "cancelled" }
     });
 
-    // Update user plan in Supabase
-    const { error: updateError } = await supabase
-      .from('users')
-      .update({ plan: 'free' })
-      .eq('id', userId);
+    // Update user in Supabase
+    const { error } = await supabase
+      .from("users")
+      .update({
+        status: "cancelled",
+        plan: "free",
+        next_billing: null,
+        valid_until: new Date().toISOString()
+      })
+      .eq("id", userId);
 
-    if (updateError) {
-      console.error('❌ Supabase update error:', updateError);
-      return { success: false, error: updateError.message };
-    }
+    if (error) throw error;
 
     return {
       success: true,
-      status: response.status,
-      planUpdated: true
+      status: response.status
     };
 
-  } catch (error) {
-    console.error('Cancel Subscription Error:', error);
-    return { success: false, error: error.message };
+  } catch (err) {
+    console.error("Cancel Subscription Error:", err);
+    return { success: false, error: err.message };
   }
 }
 
