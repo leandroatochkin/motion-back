@@ -63,7 +63,7 @@ router.post('/', checkToken, async (req, res) => {
     .from('users')
     .update({
       subscription_id: subscriptionId,
-      subscription_status: status || 'pending',
+      status: status || 'pending',
       plan: 'pending',               // User gets full plan only after MP approves
       next_billing_date: null,       // MP will send via webhook after 1st payment
       cancel_at: null
