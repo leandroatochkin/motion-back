@@ -14,8 +14,8 @@ router.post('/', checkToken, async (req, res) => {
   if (!userId) return res.status(400).json({ error: 'userId required' });
 
   try {
-    // Step 1: Upsert user row
-    const { data: existingUser, error: selectError } = await supabase
+    // 1. Check if the user exists
+    const { data: user, error: selectError } = await supabase
       .from('users')
       .select('*')
       .eq('id', userId)
@@ -23,26 +23,40 @@ router.post('/', checkToken, async (req, res) => {
 
     if (selectError) throw selectError;
 
-    if (!existingUser) {
+    const isReturningUser = !!user;
+
+    // 2. If user does not exist, create it
+    if (!user) {
       const { error: insertError } = await supabase
         .from('users')
-        .insert({ id: userId });
+        .insert({ 
+          id: userId,
+          user_status: 'active' // default
+        });
 
       if (insertError) throw insertError;
+    } 
+    else {
+      // If exists but is inactive, mark active again
+      if (user.user_status === 'inactive') {
+        await supabase
+          .from('users')
+          .update({ user_status: 'active' })
+          .eq('id', userId);
+      }
     }
 
-    // Step 2: Get usage
-    const { data, error: usageError } = await supabase
+    // 3. Fetch usage + plan
+    const { data: details, error: usageError } = await supabase
       .from('users')
-      .select('sketch_count, plan, subscription_id')
+      .select('sketch_count, plan, subscription_id, user_status')
       .eq('id', userId)
       .maybeSingle();
 
     if (usageError) throw usageError;
 
-    //const limit = (data.plan === 'pro' || data.plan === 'premium') ? MAX_SKETCH_LIMIT : FREE_SKETCH_LIMIT;
-
-    const limit = (plan) => {
+    // 4. Limit logic
+    const getLimit = (plan) => {
       switch (plan) {
         case 'premium':
           return PREMIUM_SKETCH_LIMIT;
@@ -51,18 +65,21 @@ router.post('/', checkToken, async (req, res) => {
         default:
           return FREE_SKETCH_LIMIT;
       }
-  }
-    const limitValue = limit(data.plan);
+    };
+
+    const limit = getLimit(details.plan);
 
     return res.json({
       ok: true,
+      returningUser: isReturningUser,
+      userStatus: details.user_status,
       usage: {
-        used: data.sketch_count,
-        limitValue,
-        remaining: Math.max(0, limitValue - data.sketch_count)
+        used: details.sketch_count,
+        limit,
+        remaining: Math.max(0, limit - details.sketch_count),
       },
-      plan: data.plan,
-      subsriptionId: data.subscription_id
+      plan: details.plan,
+      subscriptionId: details.subscription_id
     });
 
   } catch (err) {

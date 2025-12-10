@@ -11,6 +11,7 @@ import createPlansRoute from './api/routes/payment/mercadopago.js';
 import webhookRoute from './api/routes/payment/webhook.js';
 import verifyPaymentRoute from './api/routes/payment/verifyPayment.js';
 import cancelSubscriptionRoute from './api/routes/payment/cancelSubscription.js';
+import deleteAccountRoute from './api/routes/user/deleteAccount.js';
 
 const app = express();
 const host = process.env.PORT
@@ -48,5 +49,6 @@ app.use('/create-plans', createPlansRoute);
 app.use('/webhook-mercadopago', webhookRoute);
 app.use('/verify-payment', verifyPaymentRoute);
 app.use('/cancel-subscription', cancelSubscriptionRoute);
+app.use('/delete-account', deleteAccountRoute);
 
 app.listen(3000, ()=>console.log(`listening on port ${host}`))
