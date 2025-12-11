@@ -16,7 +16,7 @@ const client = new MercadoPagoConfig({
   }
 });
 
-const preApprovalClient = new PreApproval(client);
+export const preApprovalClient = new PreApproval(client);
 const preApprovalPlanClient = new PreApprovalPlan(client);
 export const paymentClient = new Payment(client);
 

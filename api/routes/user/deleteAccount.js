@@ -1,7 +1,7 @@
 import express from 'express';
 import { checkToken } from '../../middleware/checkToken.js';
 import { supabase } from '../../storage/supabase.js';
-import { cancelSubscription } from '../payments/mercadopago.js';
+import { cancelSubscription } from '../payment/mercadopago.js';
 import { isSpamSuggestion } from '../../middleware/spamDetector.js';
 import { sanitizeInput } from '../../middleware/sanitizer.js';
 
