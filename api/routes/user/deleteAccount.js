@@ -7,8 +7,9 @@ const router = express.Router();
 
 // POST /delete-account
 router.post('/', checkToken, async (req, res) => {
-  const { userId } = req.body;
+  const { userId, type, exitReason } = req.body;
 
+  // Basic validation
   if (!userId) {
     return res.status(400).json({
       success: false,
@@ -16,11 +17,18 @@ router.post('/', checkToken, async (req, res) => {
     });
   }
 
+  if (!type || !content) {
+    return res.status(400).json({
+      success: false,
+      error: "Exit suggestion requires type and content"
+    });
+  }
+
   try {
     // 1️⃣ Fetch subscription id
     const { data: user, error: userError } = await supabase
       .from("users")
-      .select("subscription_id")
+      .select("subscription_id, email")
       .eq("id", userId)
       .maybeSingle();
 
@@ -31,8 +39,7 @@ router.post('/', checkToken, async (req, res) => {
 
     // 2️⃣ Cancel subscription if present
     if (user?.subscription_id) {
-      const cancel = await cancelSubscription(user.subscription_id, userId);
-      console.log("🔔 Subscription cancel result:", cancel);
+      await cancelSubscription(user.subscription_id, userId);
     }
 
     // 3️⃣ Soft delete user
@@ -51,9 +58,26 @@ router.post('/', checkToken, async (req, res) => {
       return res.status(500).json({ success: false, error: updateError.message });
     }
 
+    // 4️⃣ Insert exit suggestion
+    const { error: suggestionError } = await supabase
+      .from("suggestions")
+      .insert({
+        userId,
+        userEmail: user.email,
+        type,
+        exitReason,
+        resolved: false,
+        notes: null
+      });
+
+    if (suggestionError) {
+      console.error("❌ Error creating exit suggestion:", suggestionError);
+      // Continue — don't break account deletion
+    }
+
     return res.json({
       success: true,
-      message: "User account deleted and subscription canceled."
+      message: "User account deleted, subscription canceled, exit feedback saved."
     });
 
   } catch (err) {
