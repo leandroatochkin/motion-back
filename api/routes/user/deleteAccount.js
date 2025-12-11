@@ -2,8 +2,8 @@ import express from 'express';
 import { checkToken } from '../../middleware/checkToken.js';
 import { supabase } from '../../storage/supabase.js';
 import { cancelSubscription } from '../payments/mercadopago.js';
-import sanityzeInput from '../../middleware/sanitizer.js';
 import { isSpamSuggestion } from '../../middleware/spamDetector.js';
+import { sanitizeInput } from '../../middleware/sanitizer.js';
 
 
 const router = express.Router();
@@ -61,7 +61,7 @@ router.post('/', checkToken, async (req, res) => {
       return res.status(500).json({ success: false, error: updateError.message });
     }
 
-    const safeContent = sanityzeInput(exitReason);
+    const safeContent = sanitizeInput(exitReason);
 
     if (isSpamSuggestion(safeContent)) {
         safeContent = null
