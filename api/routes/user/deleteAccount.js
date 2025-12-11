@@ -1,6 +1,7 @@
 import express from 'express';
 import { checkToken } from '../../middleware/checkToken.js';
 import { supabase } from '../../storage/supabase.js';
+import { cancelSubscription } from '../payments/mercadopago.js';
 
 const router = express.Router();
 
@@ -16,22 +17,43 @@ router.post('/', checkToken, async (req, res) => {
   }
 
   try {
-    const { error } = await supabase
+    // 1️⃣ Fetch subscription id
+    const { data: user, error: userError } = await supabase
+      .from("users")
+      .select("subscription_id")
+      .eq("id", userId)
+      .maybeSingle();
+
+    if (userError) {
+      console.error("❌ Error fetching user:", userError);
+      return res.status(500).json({ success: false, error: userError.message });
+    }
+
+    // 2️⃣ Cancel subscription if present
+    if (user?.subscription_id) {
+      const cancel = await cancelSubscription(user.subscription_id, userId);
+      console.log("🔔 Subscription cancel result:", cancel);
+    }
+
+    // 3️⃣ Soft delete user
+    const { error: updateError } = await supabase
       .from('users')
       .update({
         user_status: 'inactive',
-        deleted_at: new Date().toISOString()
+        deleted_at: new Date().toISOString(),
+        plan: 'free',
+        subscription_id: null
       })
       .eq('id', userId);
 
-    if (error) {
-      console.error('❌ Error deleting user:', error);
-      return res.status(500).json({ success: false, error: error.message });
+    if (updateError) {
+      console.error('❌ Error updating user:', updateError);
+      return res.status(500).json({ success: false, error: updateError.message });
     }
 
     return res.json({
       success: true,
-      message: "User account deleted"
+      message: "User account deleted and subscription canceled."
     });
 
   } catch (err) {
