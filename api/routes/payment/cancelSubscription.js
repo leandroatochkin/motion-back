@@ -2,6 +2,8 @@ import express from "express";
 import { cancelSubscription } from "./mercadopago.js";
 import { checkToken } from "../../middleware/checkToken.js";
 import { supabase } from "../../storage/supabase.js";
+import { sanitizeInput } from "../../middleware/sanitizer.js";
+import { isSpamSuggestion } from "../../middleware/spamDetector.js";
 
 const router = express.Router();
 
@@ -25,13 +27,19 @@ router.post("/", checkToken, async (req, res) => {
     });
   }
 
+  const safeContent = sanitizeInput(exitReason);
+
+  if (isSpamSuggestion(safeContent)) {
+      safeContent = null
+    }
+
   // Store exit suggestion (OPTIONAL)
   if (exitReason && exitReason.trim() !== "") {
     const { data, error } = await supabase
       .from("suggestions")
       .insert({
         userId,
-        content: exitReason,
+        content: safeContent,
         type: "exit",
         userEmail: req.user?.email || null
       });

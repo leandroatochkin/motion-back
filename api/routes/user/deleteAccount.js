@@ -2,12 +2,15 @@ import express from 'express';
 import { checkToken } from '../../middleware/checkToken.js';
 import { supabase } from '../../storage/supabase.js';
 import { cancelSubscription } from '../payments/mercadopago.js';
+import sanityzeInput from '../../middleware/sanitizer.js';
+import { isSpamSuggestion } from '../../middleware/spamDetector.js';
+
 
 const router = express.Router();
 
 // POST /delete-account
 router.post('/', checkToken, async (req, res) => {
-  const { userId, type, exitReason } = req.body;
+  const { userId, exitReason } = req.body;
 
   // Basic validation
   if (!userId) {
@@ -58,14 +61,20 @@ router.post('/', checkToken, async (req, res) => {
       return res.status(500).json({ success: false, error: updateError.message });
     }
 
+    const safeContent = sanityzeInput(exitReason);
+
+    if (isSpamSuggestion(safeContent)) {
+        safeContent = null
+      }
+
     // 4️⃣ Insert exit suggestion
     const { error: suggestionError } = await supabase
       .from("suggestions")
       .insert({
         userId,
         userEmail: user.email,
-        type,
-        exitReason,
+        type: 'exit.suggestion',
+        content: safeContent,
         resolved: false,
         notes: null
       });
