@@ -1,11 +1,12 @@
 import express from "express";
 import { cancelSubscription } from "./mercadopago.js";
 import { checkToken } from "../../middleware/checkToken.js";
+import { supabase } from "../../storage/supabase.js";
 
 const router = express.Router();
 
 router.post("/", checkToken, async (req, res) => {
-  const { subscriptionId, userId } = req.body;
+  const { subscriptionId, userId, exitReason } = req.body;
 
   if (!subscriptionId || !userId) {
     return res.status(400).json({
@@ -14,6 +15,7 @@ router.post("/", checkToken, async (req, res) => {
     });
   }
 
+  // Cancel subscription
   const result = await cancelSubscription(subscriptionId, userId);
 
   if (!result.success) {
@@ -21,6 +23,24 @@ router.post("/", checkToken, async (req, res) => {
       success: false,
       error: result.error
     });
+  }
+
+  // Store exit suggestion (OPTIONAL)
+  if (exitReason && exitReason.trim() !== "") {
+    const { data, error } = await supabase
+      .from("suggestions")
+      .insert({
+        userId,
+        content: exitReason,
+        type: "exit",
+        userEmail: req.user?.email || null
+      });
+
+    if (error) {
+      console.error("❌ Error saving exit suggestion:", error);
+    } else {
+      console.log("📨 Exit reason saved:", data);
+    }
   }
 
   return res.json({
@@ -32,3 +52,4 @@ router.post("/", checkToken, async (req, res) => {
 });
 
 export default router;
+
