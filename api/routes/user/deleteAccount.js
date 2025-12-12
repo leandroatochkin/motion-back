@@ -20,12 +20,7 @@ router.post('/', checkToken, async (req, res) => {
     });
   }
 
-  if (!type || !content) {
-    return res.status(400).json({
-      success: false,
-      error: "Exit suggestion requires type and content"
-    });
-  }
+
 
   try {
     // 1️⃣ Fetch subscription id
