@@ -9,7 +9,7 @@ const PREMIUM_SKETCH_LIMIT = parseInt(process.env.PREMIUM_SKETCH_LIMIT);
 const MAX_SKETCH_LIMIT = parseInt(process.env.MAX_SKETCH_LIMIT);
 
 router.post('/', checkToken, async (req, res) => {
-  const { userId } = req.body;
+  const { userId, userEmail } = req.body;
 
   if (!userId) return res.status(400).json({ error: 'userId required' });
 
@@ -25,24 +25,28 @@ router.post('/', checkToken, async (req, res) => {
 
     const isReturningUser = !!user;
 
-    // 2. If user does not exist, create it
     if (!user) {
+      // 2a. User does not exist → create
       const { error: insertError } = await supabase
         .from('users')
         .insert({ 
           id: userId,
-          user_status: 'active' // default
+          user_status: 'active',
+          email: userEmail || null
         });
-
       if (insertError) throw insertError;
-    } 
-    else {
-      // If exists but is inactive, mark active again
-      if (user.user_status === 'inactive') {
-        await supabase
+    } else {
+      // 2b. User exists → check status and email
+      const updates = {};
+      if (user.user_status === 'inactive') updates.user_status = 'active';
+      if (!user.email && userEmail) updates.email = userEmail;
+
+      if (Object.keys(updates).length > 0) {
+        const { error: updateError } = await supabase
           .from('users')
-          .update({ user_status: 'active' })
+          .update(updates)
           .eq('id', userId);
+        if (updateError) throw updateError;
       }
     }
 
@@ -58,12 +62,9 @@ router.post('/', checkToken, async (req, res) => {
     // 4. Limit logic
     const getLimit = (plan) => {
       switch (plan) {
-        case 'premium':
-          return PREMIUM_SKETCH_LIMIT;
-        case 'pro':
-          return MAX_SKETCH_LIMIT;
-        default:
-          return FREE_SKETCH_LIMIT;
+        case 'premium': return PREMIUM_SKETCH_LIMIT;
+        case 'pro': return MAX_SKETCH_LIMIT;
+        default: return FREE_SKETCH_LIMIT;
       }
     };
 
