@@ -169,6 +169,8 @@ export async function createDirectSubscription(subscriptionData) {
       backUrl = `${process.env.FRONTEND_URL_A}/payment-success`
     } = subscriptionData;
 
+    console.log('🔗 Creating subscription with back_url:', backUrl);
+
     const preapproval = await preApprovalClient.create({
       body: {
         reason: planName,
