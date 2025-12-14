@@ -55,7 +55,7 @@ router.post('/', checkToken, async (req, res) => {
         .update({ 
           plan: planName,
           subscription_id: preapprovalId,
-          subscription_status: 'active',
+          status: 'active',
           updated_at: new Date().toISOString()
         })
         .eq('id', userId);

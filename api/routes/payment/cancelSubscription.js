@@ -27,7 +27,7 @@ router.post("/", checkToken, async (req, res) => {
     });
   }
 
-  const safeContent = sanitizeInput(exitReason);
+  let safeContent = sanitizeInput(exitReason);
 
   if (isSpamSuggestion(safeContent)) {
       safeContent = null
