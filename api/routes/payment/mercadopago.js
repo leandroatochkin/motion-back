@@ -372,7 +372,7 @@ export async function cancelSubscription(subscriptionId, userId) {
       .update({
         status: "cancelled",
         plan: "free",
-        next_billing: null,
+        next_billing_date: null,
         valid_until: new Date().toISOString()
       })
       .eq("id", userId);
